@@ -6,7 +6,7 @@
 using namespace std;
 
 
-class FastaIndex {
+class GFFastaIndex {
  public:
 	map<string, vector<long> > fai;
 	ifstream fastaIn;

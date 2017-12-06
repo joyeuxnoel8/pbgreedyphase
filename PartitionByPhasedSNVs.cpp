@@ -19,7 +19,6 @@ using namespace seqan;
 namespace po = boost::program_options;
 
 
-
 long min(long a, long b) {
 	if (a <= b) {
 		return a;
@@ -263,11 +262,11 @@ bool ParseRegion(string &region, string &chrom, int &start,int &end){
 		chrom = region.substr(0,cpos);
 	}
 	stringstream posStrm(region.substr(cpos));
-	if ((posStrm >> start) == 0) {
+	if ((posStrm >> start).eof()) {
 		return false;
 	}	
 	posStrm.get();
-	if ((posStrm >> end) == 0) {
+	if ((posStrm >> end).eof()) {
 		return false;
 	}
 	return true;
@@ -581,7 +580,7 @@ int main (int ac, char* av[]) {
 	FASTAReader reader;
 	reader.SetToUpper();
 	
-	FastaIndex fastaIndex;
+	GFFastaIndex fastaIndex;
 	fastaIndex.Initialize(args.refFileName);
 		
 	string regionChrom;

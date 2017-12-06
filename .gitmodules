@@ -1,0 +1,18 @@
+[submodule "seqan"]
+	path = seqan
+	url = https://github.com/seqan/seqan.git
+[submodule "blasr"]
+	path = blasr
+	url = https://github.com/mchaisso/blasr.git
+[submodule "vcflib"]
+	path = vcflib
+	url = https://github.com/vcflib/vcflib.git
+[submodule "boost"]
+	path = boost
+	url = https://github.com/boostorg/boost.git
+[submodule "liblzma"]
+	path = liblzma
+	url = https://github.com/kobolabs/liblzma.git
+[submodule "bzip2-1.0.6"]
+	path = bzip2-1.0.6
+	url = https://github.com/enthought/bzip2-1.0.6.git
