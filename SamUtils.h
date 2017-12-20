@@ -68,7 +68,7 @@ void BuildNameToIndexMap(SAMHeader &header, vector<FASTASequence> &genome, map<s
 
 	for (i = 0; i < header.chroms.size(); i++) {
 		for (j = 0; j < genome.size(); j++) {
-			if (header.chroms[i] == genome[j].title) {
+			if (header.chroms[i] == genome[j].GetName()) {
 				refIndex[header.chroms[i]] = j;
 				break;
 			}

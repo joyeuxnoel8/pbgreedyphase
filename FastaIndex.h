@@ -40,10 +40,10 @@ class FastaIndex {
 
 	void GetSeq(string &seq, string &contig, int start=0, int end=0) {
 	  if (fai.find(contig) == fai.end()) {
-		start=0; 
-		end = 0;
-		seq="";
-		return;
+			start=0; 
+			end = 0;
+			seq="";
+			return;
 	  }
 		this->Print();
 		vector<long> &v = fai[contig];

@@ -6,11 +6,13 @@
 #include "seqan/basic.h"
 #include <iostream>
 #include <string>
+#include <stdlib.h>
 #include <set>
 #include "FASTASequence.h"
 #include "FASTAReader.h"
 #include "SampleTools.h"
 #include "FastaIndex.h"
+#include "PartitionTools.h"
 
 using namespace std;
 
@@ -187,7 +189,7 @@ bool ReadRecord(istream &in, SAMRecord &record) {
 	return true;
 }
 
-void MakeAlignStrings(SAMRecord &record, char *ref, int regionStart, int regionEnd, string &queryAln, string &refAln) {
+int MakeAlignStrings(SAMRecord &record, char *ref, int regionStart, int regionEnd, string &queryAln, string &refAln) {
 	//
 	// First compute the length of the output strings.
 	//
@@ -217,8 +219,9 @@ void MakeAlignStrings(SAMRecord &record, char *ref, int regionStart, int regionE
 		}
 		if (record.ops[i] == 'M' or record.ops[i] == 'X' or record.ops[i] == '=') {
 			if (regionEnd != -1 and refPos - record.refPos > regionEnd - regionStart) {
-				cerr << "ERROR! Alignment " << record.title << " extends past reference region." << endl;
-				exit(0);
+				queryAln = "";
+				refAln = "";
+				return 0;
 			}
 			strncpy(&queryAln[queryAlnPos], &query[queryPos], record.lengths[i]);
 			strncpy(&refAln[refAlnPos], &ref[refPos-regionStart], record.lengths[i]);
@@ -239,10 +242,14 @@ void MakeAlignStrings(SAMRecord &record, char *ref, int regionStart, int regionE
 		}
 		if (record.ops[i] == 'D') {
 			if (regionEnd != -1 and refPos - record.refPos > regionEnd - regionStart) {
-                                cerr << "ERROR! Alignment " << record.title << " extends past reference region." << endl;
-                                exit(0);
-                        }
-
+				queryAln = "";
+				refAln = "";
+				return 0;
+			}
+			//			cout << i << " " << record.lengths[i] << " " << record.lengths.size() << endl;
+			assert(refAlnPos >= 0);
+			assert(refPos-regionStart >= 0);
+			
 			strncpy(&refAln[refAlnPos], &ref[refPos-regionStart], record.lengths[i]);
 			refAlnPos += record.lengths[i];
 			refPos += record.lengths[i];
@@ -252,20 +259,27 @@ void MakeAlignStrings(SAMRecord &record, char *ref, int regionStart, int regionE
 			}
 		}
 	}
+	for (int i = 0; i < refAln.size(); i++) {
+		refAln[i] = toupper(refAln[i]);
+	}
+	return 1;
 }
 
 bool ParseRegion(string &region, string &chrom, int &start,int &end){
 	int cpos =region.find(":");
 	if (cpos == region.npos) {
-	return false;
+		return false;
 	}
 	else {
 		chrom = region.substr(0,cpos);
+		cerr << "rgn: " << chrom << endl;
 	}
+	cpos++;
 	stringstream posStrm(region.substr(cpos));
 	if ((posStrm >> start) == 0) {
 		return false;
-	}	
+	}
+	cerr << "rgn start: " << start << endl;	
 	posStrm.get();
 	if ((posStrm >> end) == 0) {
 		return false;
@@ -282,32 +296,43 @@ public:
 	string refFileName;
 	string h1FileName;
 	string h2FileName;
-	string phasedSample;
+	string sample;
 	string phaseTag;
 	int verbosity;
 	int block;
 	int minGenotyped;
 	int maxUnknown;
 	int minDifference;
+	int minScoreDifference;
 	string unassigned;
 	string region;
 	string summaryFile;
 	string phaseStatsFileName;
 	string chromosome;
+	bool assumeAutozygous;
+	int padding;
+	int nwWindow;
 	CommandLineParser() {
 		h1FileName = "";
 		h2FileName = "";
 		verbosity = 0;
 		block = 3;
 		minGenotyped = 2;
+		minScoreDifference= 1;
 		maxUnknown = 6;
 		unassigned = "";
 		region = "";
 		summaryFile = "";
 		phaseStatsFileName = "";
 		minDifference = 0;
+		nwWindow = 10;
 		phaseTag = "";
-		chromosome = "";
+		padding=0;
+		vcfFileName="";
+		refFileName="";
+		samFileName="";
+		int    regionPadding;
+		assumeAutozygous=false;
 		desc.add_options()
 			("help", "Write help")
 			("vcf", po::value<string>(), "VCF file. For now just het SNVs.")
@@ -316,20 +341,24 @@ public:
 			("tag", po::value<string>(), "Store haplotype in SAM optional field with this 2-character tag.")
 			("h1", po::value<string>(), "Haplotype 1")
 			("h2", po::value<string>(), "Haplotype 2")
-			("v", po::value<int>(),"Verboxity")
-			("chrom", po::value<string>(), "Chromosome to phase")
+			("verbosity", po::value<int>(),"Verbosity")
+			("pad", po::value<int>(), "padding around region.")
 			("block", po::value<int>(), "Minimum adjacent block size to record SNV status")
-			("minDifference", po::value<int>(), "Minimum difference between genotype count")			
-			("phasedSample", po::value<string>(), "Sample to look up for phasing status.")
+			("minDifference", po::value<int>(), "Minimum difference between genotype count")
+			("minScoreDifference", po::value<int>(), "Minimum score difference between ref/alt realignment")
+			("nw-window", po::value<int>(), "WIndow to do Needleman-Wunsch alignment in")			
+			("sample", po::value<string>(), "Sample to look up for phasing status.")
 			("maxUnknown", po::value<int>(), "Maximum sites with unknown/alt genotype")
 			("minGenotyped", po::value<int>(), "Minimum genotyped sites per read")
 			("unassigned", po::value<string>(), "Output unassigned reads here")
-			("region", po::value<string>(), "Region of reference to phase")
+			("rgn", po::value<string>(), "Region of reference to phase")
 			("summary",  po::value<string>(), "Write a summary of phased reaads to this file.")
 			("phaseStats",  po::value<string>(), "Write the number of h0/h1 matches to this file per read.")
+			("null-assumes-autozygous",  "If there are no values in the VCF, assume autozygous region.")
 			;
 	}
 
+	
 	template<typename T_Value>
 	bool SetRequiredValue(string key, po::variables_map &vm, T_Value &value) {
 		string res;
@@ -348,7 +377,13 @@ public:
 		if (vm.count(key.c_str())) {
 			value = vm[key.c_str()].as<T_Value>();
 		}
-	}		
+	}
+
+	void SetOptionalFlag(string key, po::variables_map &vm, bool &value) {
+		if (vm.count(key.c_str())) {
+   		value = true;
+	  }
+	}
 		
 
 	void ParseCommandLine(int ac, char* av[]) {
@@ -364,22 +399,28 @@ public:
 			SetRequiredValue("vcf", vm, vcfFileName);
 			SetRequiredValue("sam", vm, samFileName);
 			SetRequiredValue("ref", vm, refFileName);
-			SetOptionalValue("phasedSample", vm, phasedSample);
+
+			
+			SetOptionalValue("sample", vm, sample);
 			//
 			// Parse optional sargs.
 			//
+			SetOptionalValue("pad", vm, padding);			
+			SetOptionalValue("rgn", vm, region);
 			SetOptionalValue("tag", vm, phaseTag);
 			SetOptionalValue("h1", vm, h1FileName);
 			SetOptionalValue("h2", vm, h2FileName);
-			SetOptionalValue("v", vm, verbosity);
+			SetOptionalValue("verbosity", vm, verbosity);
 			SetOptionalValue("block", vm, block);
 			SetOptionalValue("minDifference", vm, minDifference);			
 			SetOptionalValue("maxUnknown", vm, maxUnknown);
 			SetOptionalValue("minGenotyped", vm, minGenotyped);
 			SetOptionalValue("unassigned", vm, unassigned);
-			SetOptionalValue("region", vm, region);
 			SetOptionalValue("phaseStats",vm, phaseStatsFileName);
 			SetOptionalValue("chrom",vm, chromosome);
+			SetOptionalValue("summary",vm, summaryFile);
+			SetOptionalValue("nw-window",vm,nwWindow);
+			SetOptionalFlag("null-assumes-autozygous",vm, assumeAutozygous);
 		}
 
 		catch(exception& e) {
@@ -394,6 +435,8 @@ public:
 	}
 	
 };
+
+
 
 class SNV {
 public:
@@ -567,12 +610,6 @@ int main (int ac, char* av[]) {
 
 	CommandLineParser	args;
 	args.ParseCommandLine(ac, av);
-	/*	
-	VcfFileIn vcfFile(args.vcfFileName.c_str());
-	VcfHeader vcfHeader;
-	VcfRecord vcfRecord;
-	readHeader(vcfHeader, vcfFile);
-	*/
 	int sampleIndex;
 
 	ifstream bamFileIn(args.samFileName.c_str());
@@ -593,9 +630,15 @@ int main (int ac, char* av[]) {
 			cerr << "Could not parse " << args.region << endl;
 			exit(1);
 		}
+		regionStart -= args.padding;
+		regionEnd   += args.padding;
 	}
-	
+	else {
+		reader.Initialize(args.refFileName);
+		reader.ReadAllSequences(genome);
+	}
 
+	
 	sampleIndex = 0;
 	ofstream haplotypeOut[2];
 	ofstream phaseStatsOut;
@@ -621,17 +664,31 @@ int main (int ac, char* av[]) {
 		int pos = record.position;
 			
 
-		//		VcfRecord record;		
-		//		readRecord(record, vcfFile);
-
 		if (ref.size() == alt.size() and ref.size() == 1) {
 			int recordLength = ref.size();
-			//			char *genotypeInfos = toCString(record.genotypeInfos[sampleIndex]);
-
-			//			int genotypeInfosLength = length(record.genotypeInfos[sampleIndex]);
-			map<string, vector<string> > &sample = record.samples.begin()->second;
-			if (sample.find("GT") != sample.end()) {
-				string gt = sample["GT"][0];
+			map<string, vector<string> > *sample;
+			if (args.sample == "") {
+				sample = &record.samples.begin()->second;
+			}
+			else {
+				//
+				// Do some work to find the sample
+				//
+				vcflib::Samples::iterator sampIt = record.samples.find(args.sample);
+				if (sampIt == record.samples.end()) {
+					cout << "ERROR, sample " << args.sample << " was not in the vcf file." << endl;
+					int s;
+					cout << "Samples include: ";
+					for (s = 0; s < record.sampleNames.size(); s++) {
+						cout << record.sampleNames[s] << ",";
+					}
+					cout << endl;
+					exit(1);
+				}
+				sample = &sampIt->second;
+			}
+			if (sample->find("GT") != sample->end()) {
+				string gt = (*sample)["GT"][0];
 				if (gt.size() == 3 and
 						IsPhasedHetGenotype(gt) ) {
 					int h1, h2;
@@ -675,9 +732,7 @@ int main (int ac, char* av[]) {
 	}
 
 
-	typedef Row<Align<IupacString> >::Type TRow;                 // gapped sequence type
-
-	
+	typedef Row<Align<IupacString> >::Type TRow; // gapped sequence type
 
 	int maybeStored = 0;
 
@@ -685,7 +740,7 @@ int main (int ac, char* av[]) {
 	prevRef = "";
 
 	int nH1=0,nH2=0,nUnk=0;
-
+	int bH1=0,bH2=0,bUnk=0;
 	bool writeField = false;
 	bool splitHaplotypes = false;
 
@@ -697,6 +752,23 @@ int main (int ac, char* av[]) {
 		splitHaplotypes = true;
 	}
 
+	int refStart = 0;
+	int refRegionStart = 0;
+	if (regionStart < 0) {
+			regionStart = 0;
+	}
+	
+	if (args.region != "" and
+			fastaIndex.fai.find(regionChrom) != fastaIndex.fai.end()) {
+		int contigLength = fastaIndex.fai[regionChrom][0];
+		if (contigLength < regionEnd || regionEnd == -1) {
+			regionEnd = contigLength;
+			cout << "set region end." <<endl;
+			exit(0);
+		}
+		fastaIndex.GetSeq(refChrom, regionChrom, regionStart, regionEnd);
+	}
+	
 	int alnIndex = 0;
 	while (bamFileIn)  {
 		SAMRecord samRecord;
@@ -705,7 +777,7 @@ int main (int ac, char* av[]) {
 		alnIndex +=1;
 		
 		if (result == false) {
-			cerr << "PartitionByPhasedSNVs ending with " << result << endl;
+
 			break;
 		}
 		
@@ -716,17 +788,22 @@ int main (int ac, char* av[]) {
 			int totalClipped = 0;
 			int refAlnLength = samRecord.GetRefAlignLength();
 			int refAlnStart  = samRecord.refPos;
-			int chromIndex = refIndex[samRecord.chrom];
+			int chromIndex   = refIndex[samRecord.chrom];
 			
-			if (samRecord.chrom != prevRef) {
-				fastaIndex.GetSeq(refChrom, samRecord.chrom, refAlnStart, refAlnStart+ refAlnLength);
-				prevRef = samRecord.chrom;
-			}
-			
-
 			string tAlnStr, qAlnStr;
-
-			MakeAlignStrings(samRecord, &refChrom[0], refAlnStart, refAlnStart+refAlnLength, qAlnStr, tAlnStr );
+			char *refPtr;
+			if (args.region == "") {
+				refPtr = (char*) &genome[chromIndex];
+			}
+			else {
+				refPtr = &refChrom[0];
+			}
+				
+			int res = MakeAlignStrings(samRecord, refPtr, regionStart, regionEnd, qAlnStr, tAlnStr );
+			if (res == 0) {
+				cerr << "Could not make aln strings " << refPtr << " " << regionStart << " " << regionEnd << endl;
+				continue;
+			}
 			
 			int l1 = tAlnStr.size();
 			int l2 = qAlnStr.size();
@@ -736,16 +813,7 @@ int main (int ac, char* av[]) {
 			int qPos = 0;
 			int tPos = 0;
 			int i;
-			int nSNP = 0;
 
-			vector<int> chromSNVPos;
-			vector<char> chromSNVChar;
-			vector<char> chromSNVRef;
-			vector<char> readSNVChar;
-			vector<int>  readSNVAlleles;
-			vector<int>  snvPreBlock, snvPostBlock;
-			vector<bool> retain;
-			vector<int>  phase;
 			string alnChrom = samRecord.chrom;
 			int startVar, endVar, curVar;
 			bool foundBounds;
@@ -753,66 +821,103 @@ int main (int ac, char* av[]) {
 			bool setPostBlock = false;
 			int snvIndex = 0;
 			/*
-			GenotypedRead *read = new GenotypedRead;
-			read->chrom = alnChrom;
-			read->samLine = samRecord.samLine;
-			read->alnStart = refAlnStart;
-			read->alnEnd   = refAlnStart + refAlnLength;
+				GenotypedRead *read = new GenotypedRead;
+				read->chrom = alnChrom;
+				read->samLine = samRecord.samLine;
+				read->alnStart = refAlnStart;
+				read->alnEnd   = refAlnStart + refAlnLength;
 			*/
 			int sitesGenotyped = 0;
 			int sitesUnknown    = 0;
 			int span = endVar - startVar;
 
 			int haplotype = 2;
-			int h0=0,h1=0,h2=0;			
+			int h0=0,h1=0,h2=0;
+						
+			if (args.verbosity > 0) {
+				cerr << samRecord.title << " overlaps " << endVar - startVar << " variants" << endl;
+			}
 			if (foundBounds and startVar != endVar) {
 				
 				curVar = startVar;
 				SNVDB::SNVs &chromSnps = snvDb.db[alnChrom];
+				
 				int lastGap = 0;
 				for (i = 0; i < minLength && curVar < endVar; i++) {
-					if (tAlnStr[i] != '-' and qAlnStr[i] != '-') {
-						if (tAlnStr[i] != qAlnStr[i]) {
-							++nSNP;
-						}
-						while (curVar < endVar and chromSnps[curVar].pos < tPos + refAlnStart) {
-							curVar ++;
-						}
+
+					while (curVar < endVar and chromSnps[curVar].pos < tPos + refAlnStart) {
+						curVar ++;
+					}
 					  
-						if (curVar < endVar and chromSnps[curVar].pos == tPos + refAlnStart) {
-							chromSNVPos.push_back(tPos + refAlnStart);
-							chromSNVRef.push_back(tAlnStr[i]);
-							chromSNVChar.push_back(chromSnps[curVar].nuc);
-							readSNVChar.push_back(qAlnStr[i]);
+					if (curVar < endVar and chromSnps[curVar].pos == tPos + refAlnStart) {
+
+						string tPre, tSuf, qPre, qSuf;
+						int refScore =0, altScore=0;
+						string refTStr, refQStr, altTStr, altQStr;
+						string tRef, tAlt, qStr;
+						int t;
+						if (GetUngappedPrefix(tAlnStr, i, args.nwWindow, tPre) and
+								GetUngappedPrefix(qAlnStr, i, args.nwWindow, qPre) and
+								GetUngappedSuffix(tAlnStr, i, args.nwWindow, tSuf) and
+								GetUngappedSuffix(qAlnStr, i, args.nwWindow, qSuf)) {
+							tRef = JoinPrefixSuffix(tPre, chromSnps[curVar].ref, tSuf);
+							tAlt = JoinPrefixSuffix(tPre,chromSnps[curVar].nuc,tSuf);
+							qStr = JoinPrefixSuffix(qPre,qAlnStr[i],qSuf);
+
+						if (args.verbosity > 1) {
+							cerr << tRef << endl
+									 << tAlt << endl
+									 << qStr << endl;
+						}
 							
-							//
-							// Store the number of bases without gaps before and after the snv.
-							//
-							int p = i-1;
-							while (p > 0 and tAlnStr[p] != '-' and qAlnStr[p] != '-') { p--; }
-							snvPreBlock.push_back(i-p-1);
-							p = i+1;
-							while (p < tAlnStr.size() and tAlnStr[p] != '-' and qAlnStr[p] != '-') { p++; }
-							snvPostBlock.push_back(p-i-1);
+						refScore=SWAlign(tRef, qStr, -2,1, 4, refQStr, refTStr);
+						altScore=SWAlign(tAlt, qStr, -2,1, 4, altQStr, altTStr);
+						if (args.verbosity > 1) {
+							cerr << refQStr << " - " << altQStr << endl
+									 << refTStr << " - " << altTStr << endl;
+						}
 
-							snvIndex = i;
+						} else {
+							if (args.verbosity > 1) {
+								cerr << "Could not run overlap." << endl;
+							}
+						}
+							
+						int scoreDiff = refScore-altScore;
+
 							int allele = 2; // 0 = ref, 1 = alt, 2 = unknown
-
-							if (chromSnps[curVar].nuc == qAlnStr[i]) {
+							int hap=2;							
+							if (scoreDiff > args.minScoreDifference) {
 								allele = 1;
 							}
-							else if (chromSnps[curVar].ref == qAlnStr[i]) {
+							else if (scoreDiff < -args.minScoreDifference) {
 								allele = 0;
 							}
 							else {
 								allele = 2;
 							}
-							int hap;
-							chromSnps[curVar].GetPhase(allele, hap);
-							phase.push_back(hap);
-							readSNVAlleles.push_back(allele);
-						}
+							if (allele != 2) {
+
+								chromSnps[curVar].GetPhase(allele, hap);
+								if (args.verbosity > 0) {
+									cerr << "allele: " << allele << " phase: " << hap << endl;
+								}
+								if (hap == 0) {
+									h0++;
+								}
+								else if (hap == 1) {
+									h1++;
+								}
+							}
+							else {
+								h2++;
+							}
+							
+							if (args.verbosity > 0) {
+								cerr << "pos: " << i << "\tscore: " << refScore << " " << altScore << " " << scoreDiff << " assigned: " << allele << "  nVars: " << endVar - startVar << " hap: " <<  hap  << " tpos: " << chromSnps[curVar].pos << endl;
+							}
 					}
+
 					if (tAlnStr[i] != '-') {
 						tPos ++;
 					}
@@ -820,100 +925,90 @@ int main (int ac, char* av[]) {
 						qPos ++;
 					}
 				}
-				assert(snvPostBlock.size() == snvPreBlock.size());
-				retain.resize(chromSNVPos.size(), true);
-				for (i = 0; i < chromSNVPos.size(); i++) {
-					if (snvPreBlock[i] < args.block or snvPostBlock[i] < args.block) {
-						retain[i] = false;
+			}	
+			
+			bool haplotypeFound = false;
+			if (args.assumeAutozygous and snvDb.size == 0) {
+				haplotype = 2;
+			}
+			else {
+				//				cout << h0 << " " << h1 << endl;
+				if (args.verbosity > 0) {
+					cerr << "h0: " << h0 << " h1: " << h1 << " minGenotyped " << args.minGenotyped << endl;
+				}
+				if (h0 >= args.minGenotyped or h1 >= args.minGenotyped) {
+					if (h0 - args.minDifference > h1) {
+						haplotype = 0;
+						nH1+=1;
+						bH1+= samRecord.seq.size();
+						haplotypeFound = true;
+						if (args.verbosity > 0) {
+							cerr << "HAP0 "<< samRecord.title << endl;
+						}
+					}
+					else if (h1 - args.minDifference > h0 ) {
+						haplotype = 1;
+						nH2+=1;
+						bH2+= samRecord.seq.size();						
+						haplotypeFound = true;
+						if (args.verbosity > 0) {
+							cerr << "HAP1 "<< samRecord.title << endl;
+						}
 					}
 					else {
-						if (readSNVAlleles[i] == 2) {
-							sitesUnknown++;
-						}
-						else {
-							sitesGenotyped++;
-						}
-						//						read->pos.push_back(chromSNVPos[i]);
-						//						read->genotype.push_back(readSNVAlleles[i]);
+						haplotype = 2;
 					}
 				}
-				
-
-				/*				FilterList(chromSNVPos, retain);
-									FilterList(chromSNVRef, retain);
-									FilterList(chromSNVChar, retain);
-									FilterList(readSNVAlleles, retain);
-									FilterList(readSNVChar, retain);
-				*/
-				FilterList(phase, retain);
-
-
-				for (i = 0; i < phase.size(); i++) {
-					if (phase[i] ==0) h0++;
-					if (phase[i] ==1) h1++;
-					if (phase[i] ==2) h2++;
-				}
-
-			}
-			bool haplotypeFound = false;
-			if (h0 > args.minGenotyped or h1 >= args.minGenotyped) {
-				if (h0 - args.minDifference > h1 and h0 > h2) {
-					haplotype = 0;
-					nH1+=1;
-					haplotypeFound = true;
-				}
-				else if (h1 - args.minDifference > h0 and h1 > h2) {
-					haplotype = 1;
-					nH2+=1;
-					haplotypeFound = true;
+				if (haplotypeFound == false) {
+					nUnk+=1;
+					haplotype=2;
+					bUnk+= samRecord.seq.size();											
 				}
 			}
-			if (haplotypeFound == false) {
-				nUnk+=1;
-				haplotype=2;
+			if (args.phaseStatsFileName != "") {
+				phaseStatsOut << haplotype << "\t" << h0 << "\t" << h1 << "\t" << h2 << "\t" << refAlnLength << "\t"
+											<< samRecord.chrom << ":" << refAlnStart << "-" << refAlnStart+refAlnLength << "\t"
+											<< samRecord.title << "\t" << tPos + refAlnStart <<	endl;
 			}
-				if (args.phaseStatsFileName != "") {
-					phaseStatsOut << haplotype << "\t" << h0 << "\t" << h1 << "\t" << h2 << "\t" << refAlnLength << "\t"
-												<< samRecord.chrom << ":" << refAlnStart << "-" << refAlnStart+refAlnLength << "\t" << samRecord.title << endl;
-				}
+	
 
 			if (splitHaplotypes) {
 				if (haplotype == 0) {
-
+					
 					haplotypeOut[0] << samRecord.samLine << endl;
-
+					
 				}
 				else if (haplotype == 1) {
 					haplotypeOut[1] << samRecord.samLine << endl;
-
+					
 				}
 				else {
-
 					if (args.unassigned != "") {
 						unassigned << samRecord.samLine << endl;
 					}
 					else {
-						haplotypeOut[0] << samRecord.samLine << endl;						
-						haplotypeOut[1] << samRecord.samLine << endl;						
+							haplotypeOut[0] << samRecord.samLine << endl;						
+							haplotypeOut[1] << samRecord.samLine << endl;						
 					}
 				}
 			}
 			else {
 				// add the haplotype tag to this file.
 				haplotypeOut[0] << samRecord.samLine << "\t" << args.phaseTag << ":Z:" << (int)haplotype
-								<< "," << h0 << "," << h1 <<"," << h2  << endl;
+												<< "," << h0  << "," << h1 <<"," << h2  << endl;
 			}
 		}
 	}
-	cerr << "partitionByPhasedSNVs ending with " << nH1 << " " << nH2 << " " << nUnk << endl;
+	cerr << "partitionByPhasedSNVs ending with " << nH1 << "/" << bH1 << " " << nH2 << "/"
+			 << bH2 << " " << nUnk << "/" << bUnk << endl;
 
 	if (args.summaryFile != "") {
 		ofstream summaryFile(args.summaryFile.c_str());
-		summaryFile << "H1\t" << nH1 << endl;
-		summaryFile << "H2\t" << nH2 << endl;
-		summaryFile << "unk\t" << nUnk << endl;
-		summaryFile << "nSites\t" << snvDb.size << endl;
-		summaryFile.close();
+		summaryFile << "H1\t" << nH1 << "\tH2\t" << nH2
+								<< "\tnUnk\t" << nUnk << "\tsites:\t"
+								<< snvDb.size << endl;
 	}
+
+	
 }
 

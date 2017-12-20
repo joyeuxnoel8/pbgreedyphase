@@ -13,6 +13,8 @@
 #include "SamUtils.h"
 #include "SampleTools.h"
 #include "SNVDB.h"
+#include "PartitionTools.h"
+
 namespace po = boost::program_options;
 
 using namespace std;
@@ -44,13 +46,17 @@ public:
 	float minFraction;
 	int   minCoverage;
 	int   refOffset;
-	
+	int minScoreDifference;
+	bool  noRealign;
 	CommandLineParser() {
 		vcfFileName = samFileName = refFileName = outFileName = nfqFileName = phasedSample = "";
 		nfqOutFileName = "";
 		minCoverage = 10;
 		minFraction =0.25;
 		refOffset=0;
+				minScoreDifference= 2;
+				noRealign=false;
+
 		desc.add_options()
 			("help", "Write help")
 			("vcf", po::value<string>(), "VCF file. For now just het SNVs.")
@@ -58,7 +64,9 @@ public:
 			("sam", po::value<string>(), "SAM file.")
 			("ref", po::value<string>(), "Reference file.")
 			("out", po::value<string>(), "Output file.")
+			("minScoreDifference", po::value<int>(), "Minimum score difference between ref/alt realignment")
 			("nftOut", po::value<string>(), "Output filtered nucleotide frequency.")
+			("no-realign", "Realign to target replaced by vcf difference.")
 			("minFraction", po::value<float>(), "Minimum fraction of coverge to represent.")
 			("minCoverage", po::value<int>(), "Minimum absolute coverage for het call.")
 			("phasedSample", po::value<string>(), "Sample to look up for phasing status.")
@@ -87,6 +95,12 @@ public:
 	}		
 		
 
+	void SetOptionalFlag(string key, po::variables_map &vm, bool &value) {
+		if (vm.count(key.c_str())) {
+   		value = true;
+	  }
+	}
+
 	void ParseCommandLine(int ac, char* av[]) {
 		po::variables_map vm;        
 		try {
@@ -108,6 +122,7 @@ public:
 			SetOptionalValue("minFraction", vm, minFraction);
 			SetOptionalValue("minCoverage", vm, minCoverage);
 			SetOptionalValue("refOffset", vm, refOffset);
+			SetOptionalFlag("no-realign",vm, noRealign);			
 		}
 
 		catch(exception& e) {
@@ -397,16 +412,17 @@ int main (int ac, char* av[]) {
 			vector<char> chromSNVRef;
 			vector<char> readSNVChar;
 			vector<int>  readSNVAlleles;
-			vector<int>  snvPreBlock, snvPostBlock;
+			vector<int>  snvPreBlock, snvPostBlock,alnScoreDiff;
 			vector<bool> retain;
 
-			string alnChrom = genome[chromIndex].title;
+			string alnChrom = genome[chromIndex].GetName();
 			int startVar, endVar, curVar;
 			bool foundBounds;
 			//
 			// Save start var and end var, the first and last variants that overlap
 			// the alignment of this read.
 			//
+			
 			foundBounds = snvDb.QueryBounds(alnChrom, refAlnStart, refAlnStart + refAlnLength, startVar, endVar);
 			bool setPostBlock = false;
 			int snvIndex = 0;
@@ -427,46 +443,100 @@ int main (int ac, char* av[]) {
 				// Scan the alignment for positions that overlap SNVs.
 				//
 				for (i = 0; i < minLength && curVar < endVar; i++) {
-					if (tAlnStr[i] != '-') {
-						//
-						// Bookkeeping to tabulate accuracy of this read.
-						//
-						if (tAlnStr[i] != qAlnStr[i]) {
-							++nSNP;
-						}
+					//
+					// Bookkeeping to tabulate accuracy of this read.
+					//
+					if (tAlnStr[i] != qAlnStr[i]) {
+						++nSNP;
+					}
 
-						//
-						// Make sure checking the most up to date position of the snv.
-						//
-						while (curVar < endVar and chromSnps[curVar].pos < tPos + refAlnStart) {
-							curVar ++;
-						}
+					//
+					// Make sure checking the most up to date position of the snv.
+					//
+					while (curVar < endVar and chromSnps[curVar].pos < tPos + refAlnStart) {
+						curVar ++;
+					}
 						
+					//
+					// This is the condition that a SNV was found.
+					//
+					if (curVar < endVar and chromSnps[curVar].pos == tPos + refAlnStart) {
+						chromSNVPos.push_back(tPos + refAlnStart);
+						chromSNVRef.push_back(genome[chromIndex].seq[tPos + refAlnStart]);
+						chromSNVChar.push_back(chromSnps[curVar].nuc);
+						readSNVChar.push_back(qAlnStr[i]);
+
 						//
-						// This is the condition that a SNV was found.
+						// Store how long of match was before the mismatch, and
+						// signal to store how long after.
 						//
-						if (curVar < endVar and chromSnps[curVar].pos == tPos + refAlnStart) {
-							chromSNVPos.push_back(tPos + refAlnStart);
-							chromSNVRef.push_back(genome[chromIndex].seq[tPos + refAlnStart]);
-							chromSNVChar.push_back(chromSnps[curVar].nuc);
-							readSNVChar.push_back(qAlnStr[i]);
 
+						int p = i-1;
+						while (p > 0 and tAlnStr[p] != '-' and qAlnStr[p] != '-') { p--; }
+						snvPreBlock.push_back(i-p-1);
+						p = i+1;
+						while (p < tAlnStr.size() and tAlnStr[p] != '-' and qAlnStr[p] != '-') { p++; }
+						snvPostBlock.push_back(p-i-1);
+						int w = 10;
+						string tPre, tSuf, qPre, qSuf;
+						int refScore =0, altScore=0;
+						snvIndex = i;
+						int allele = 2; // 0 = ref, 1 = alt, 2 = unknown
+							
+						if (args.noRealign == false) {
+							if (GetUngappedPrefix(tAlnStr, i, w, tPre) and
+									GetUngappedPrefix(qAlnStr, i, w, qPre) and
+									GetUngappedSuffix(tAlnStr, i, w, tSuf) and
+									GetUngappedSuffix(qAlnStr, i, w, qSuf)) {
+								string tRef = tPre + chromSnps[curVar].ref + tSuf;
+								string tAlt = tPre + chromSnps[curVar].nuc + tSuf;
+								string qStr = qPre + qAlnStr[i] + qSuf;
+									
+									
+								string refTStr, refQStr, altTStr, altQStr;
+								refScore=SWAlign(tRef, qStr, -2,1,2, refQStr, refTStr);
+								altScore=SWAlign(tAlt, qStr, -2,1,2, altQStr, altTStr);
+									
+								/*
+								//
+								// Lots of debugging information
+								//
+								cout << "REF\t \t\tALT" << endl;
+								cout << tPre << ' ' << chromSnps[curVar].ref << ' ' << tSuf << "\t"
+								<< tPre << ' ' << chromSnps[curVar].nuc << ' ' << tSuf << endl;
+								cout << qPre << ' ' << qAlnStr[i] << ' ' << qSuf << "\t"
+								<< qPre << ' ' << qAlnStr[i] << ' ' << qSuf<< endl;
+								cout << ungappedPrefix << "," << ungappedSuffix << endl;
+								cout <<  refScore << endl;
+								cout << refQStr << endl;
+								cout << refTStr << endl << endl;
+								cout << altScore << endl;
+								cout << altQStr << endl;
+								cout << altTStr << endl << endl;
+								*/
+								
+							}
+
+							int scoreDiff = refScore-altScore;
+							alnScoreDiff.push_back(scoreDiff);
+
+							//							if (chromSnps[curVar].nuc == qAlnStr[i]) {
+							if (scoreDiff < -args.minScoreDifference) {
+								allele = 1;
+							}
+							//							else if (chromSnps[curVar].ref == qAlnStr[i]) {
+							else if (scoreDiff > args.minScoreDifference) {
+								allele = 0;
+							}
+							else {
+								allele = 2;
+							}
+						}
+						else {
 							//
-							// Store how long of match was before the mismatch, and
-							// signal to store how long after.
+							// assign allele directly from the pileup
 							//
-
-							int p = i-1;
-							while (p > 0 and tAlnStr[p] != '-' and qAlnStr[p] != '-') { p--; }
-							snvPreBlock.push_back(i-p-1);
-							p = i+1;
-							while (p < tAlnStr.size() and tAlnStr[p] != '-' and qAlnStr[p] != '-') { p++; }
-							snvPostBlock.push_back(p-i-1);
-
-
-							snvIndex = i;
-							int allele = 2; // 0 = ref, 1 = alt, 2 = unknown
-
+								
 							if (chromSnps[curVar].nuc == qAlnStr[i]) {
 								allele = 1;
 							}
@@ -476,16 +546,18 @@ int main (int ac, char* av[]) {
 							else {
 								allele = 2;
 							}
-							
-							if (allele == 1) {
-								chromSnps[curVar].nalt++;
-							}
-							else {
-								chromSnps[curVar].nref++;
-							}
-							readSNVAlleles.push_back(allele);
+							refScore = altScore;
 						}
+							
+						if (allele == 1) {
+							chromSnps[curVar].nalt++;
+						}
+						else {
+							chromSnps[curVar].nref++;
+						}
+						readSNVAlleles.push_back(allele);
 					}
+
 					if (tAlnStr[i] == '-' or qAlnStr[i] == '-') {
 						lastGap = i;
 					}
