@@ -1,4 +1,4 @@
-all: partitionByPhasedSNVs readToSNVList
+all: partitionByPhasedSNVs readToSNVList vcflib/linclude/Variant.h
 
 SEQAN=seqan/include
 BOOSTLIB=boost/stage/lib
@@ -7,11 +7,11 @@ BLASR=blasr/common
 VCFLIB=vcflib
 HTSLIB=$(VCFLIB)/tabixpp/htslib
 CPPOPTS=  -g
-LZMA=liblzma/dist/lib
+LZMA=liblzma/build/lib
 CPP=g++ -std=c++14
 LIBBZ2=bzip2-1.0.6
 
-vcflib:
+vcflib/include/Variant.h:
 	cd vcflib && make -j 8
 
 partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h
