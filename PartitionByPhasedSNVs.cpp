@@ -1,3 +1,4 @@
+#include "Variant.h"
 #include "boost/program_options.hpp"
 #include "seqan/vcf_io.h"
 #include "seqan/seq_io.h"
@@ -16,7 +17,6 @@
 
 using namespace std;
 
-#include "Variant.h"
 using namespace seqan;
 namespace po = boost::program_options;
 
