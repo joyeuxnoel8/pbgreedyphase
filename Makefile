@@ -1,4 +1,4 @@
-all: boost_1_66_0/build/libs/libboost_program_options.a vcflib/include/Variant.h partitionByPhasedSNVs readToSNVList 
+all: boost_1_66_0/stage/lib/libboost_program_options.a vcflib/include/Variant.h partitionByPhasedSNVs readToSNVList 
 
 SEQAN=seqan/include
 BOOST=boost_1_66_0
@@ -18,10 +18,10 @@ boost_1_66_0.tar.gz:
 	wget https://dl.bintray.com/boostorg/release/1.66.0/source/boost_1_66_0.tar.gz
 	tar xvf boost_1_66_0.tar.gz
 
-boost_1_66_0/build/libs/libboost_program_options.a: boost_1_66_0.tar.gz
-	cd boost_1_66_0 && ./bootstrap.sh && ./b2 -j 4
+boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0.tar.gz
+	cd boost_1_66_0 && ./bootstrap.sh && ./b2 --prefix=$PWD/build -j 4
 
-partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/build/libs/libboost_program_options.a
+partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a
 	$(CPP) -g -static $(CPPOPTS) $< \
      -I $(SEQAN) \
      -I $(BLASR) \
