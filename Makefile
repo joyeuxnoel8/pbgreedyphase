@@ -23,7 +23,7 @@ boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0/bootstrap.sh
 	cd boost_1_66_0 && ./bootstrap.sh --without-libraries=python && ./b2 --prefix=$PWD/build -j 4
 
 partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a
-	$(CPP) -g -static $(CPPOPTS) $< \
+	$(CPP) -g $(CPPOPTS) $< \
      -I $(SEQAN) \
      -I $(BLASR) \
      -I $(BOOST) \
