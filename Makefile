@@ -14,15 +14,16 @@ LIBBZ2=bzip2-1.0.6
 vcflib/include/Variant.h:
 	cd vcflib && make -j 8
 
-boost_1_66_0.tar.gz:
+boost_1_66_0/bootstrap.sh:
 	wget https://dl.bintray.com/boostorg/release/1.66.0/source/boost_1_66_0.tar.gz
 	tar xvf boost_1_66_0.tar.gz
+	touch $@
 
-boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0.tar.gz
-	cd boost_1_66_0 && ./bootstrap.sh && ./b2 --prefix=$PWD/build -j 4
+boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0/bootstrap.sh
+	cd boost_1_66_0 && ./bootstrap.sh --without-libraries=python && ./b2 --prefix=$PWD/build -j 4
 
 partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a
-	$(CPP) -g -static $(CPPOPTS) $< \
+	$(CPP) -g $(CPPOPTS) $< \
      -I $(SEQAN) \
      -I $(BLASR) \
      -I $(BOOST) \
@@ -33,7 +34,7 @@ partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage
 
 
 readToSNVList: ReadToSNVList.cpp PartitionTools.h FastaIndex.h SamUtils.h GenotypedRead.h SNVDB.h 
-	$(CPP) -static $(CPPOPTS) $< \
+	$(CPP) $(CPPOPTS) $< \
      -I $(SEQAN) \
      -I $(BLASR) \
      -I $(BOOST) \
