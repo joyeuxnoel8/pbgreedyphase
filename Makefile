@@ -35,7 +35,7 @@ boost_1_66_0/bootstrap.sh:
 	touch $@
 
 boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0/bootstrap.sh
-	cd boost_1_66_0 && ./bootstrap.sh --without-libraries=python && ./b2 --prefix=$PWD/build -j 4
+	cd boost_1_66_0 && ./bootstrap.sh --with-libraries=program_options && ./b2 --prefix=$PWD/build -j 4
 
 partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a  $(ZLIB)/build/lib/libz.a
 	$(CPP) -g $(CPPOPTS) -static $^ \
