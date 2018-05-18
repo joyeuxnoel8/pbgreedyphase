@@ -1,4 +1,4 @@
-all: boost_1_66_0/stage/lib/libboost_program_options.a vcflib/include/Variant.h partitionByPhasedSNVs readToSNVList 
+all: boost_1_66_0/stage/lib/libboost_program_options.a vcflib_build_flag partitionByPhasedSNVs readToSNVList 
 
 SEQAN=seqan/include
 BOOST=boost_1_66_0
@@ -7,7 +7,7 @@ BLASR=blasr/common
 VCFLIB=vcflib
 HTSLIB=$(VCFLIB)/tabixpp/htslib
 CPPOPTS=  -g
-LZMA=liblzma/build/lib
+LZMA=lzma/build/lib
 CPP=g++ -std=c++14
 LIBBZ2=bzip2-1.0.6
 ZLIB=zlib
@@ -15,8 +15,19 @@ ZLIB=zlib
 $(ZLIB)/build/lib/libz.a:
 	cd $(ZLIB) && ./configure --static --prefix=$(PWD)/zlib/build && make -j 8 && make install
 
-vcflib/include/Variant.h:
-	cd vcflib && make -j 8
+VCFLIB_INCLUDES := "-I$(abspath vcflib/tabixpp/htslib) -I$(abspath vcflib/include) -L. -L$(abspath vcflib/tabixpp/htslib) -I$(abspath $(LIBBZ2)) -L$(abspath $(LIBBZ2))"
+VCFLIB_LDFLAGS := "-Llib -lvcflib -lhts -lpthread -lz -lm -llzma -lbz2"
+#VCFLIB_FLAGS = "-I$(abspath $(LIBBZ2))"
+
+$(LIBBZ2)/libbz2.a:
+	cd $(LIBBZ2) && make
+
+$(LZMA)/liblzma.a:
+	cd liblzma && ./configure --prefix=$(PWD)/lzma/build && make && make install
+
+vcflib_build_flag: $(LIBBZ2)/libbz2.a
+	make -C vcflib -j 8 INCLUDES=$(VCFLIB_INCLUDES) LDFLAGS=$(VCFLIB_LDFLAGS) CFLAGS=$(VCFLIB_INCLUDES)
+	touch $@
 
 boost_1_66_0/bootstrap.sh:
 	wget https://dl.bintray.com/boostorg/release/1.66.0/source/boost_1_66_0.tar.gz
@@ -26,8 +37,8 @@ boost_1_66_0/bootstrap.sh:
 boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0/bootstrap.sh
 	cd boost_1_66_0 && ./bootstrap.sh --without-libraries=python && ./b2 --prefix=$PWD/build -j 4
 
-partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a $(ZLIB)/build/lib/libz.a
-	$(CPP) -g $(CPPOPTS) $< \
+partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a  $(ZLIB)/build/lib/libz.a
+	$(CPP) -g $(CPPOPTS) -static $^ \
      -I $(SEQAN) \
      -I $(BLASR) \
      -I $(BOOST) \
@@ -45,3 +56,9 @@ readToSNVList: ReadToSNVList.cpp PartitionTools.h FastaIndex.h SamUtils.h Genoty
      -L $(BOOSTLIB) -l boost_program_options \
      -o $@ 
 
+.PHONY: clean
+clean:
+	make -C $(LIBBZ2) -f Makefile-libbz2_so clean
+	rm $(LIBBZ2)/libbz2.so
+	make -C vcflib clean
+	rm -rf boost_1_66_0.tar.gz boost_1_66_0 partitionByPhasedSNVs readToSNVList

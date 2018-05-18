@@ -1,20 +1,19 @@
+#include <iostream>
+#include <string>
+#include <stdlib.h>
 #include "Variant.h"
+#include "FASTASequence.h"
+#include "FASTAReader.h"
+#include "SampleTools.h"
+#include "FastaIndex.h"
+#include "PartitionTools.h"
 #include "boost/program_options.hpp"
 #include "seqan/vcf_io.h"
 #include "seqan/seq_io.h"
 #include "seqan/bam_io.h"
 #include "seqan/align.h"
 #include "seqan/basic.h"
-#include <iostream>
-#include <string>
-#include <stdlib.h>
 #include <set>
-#include "FASTASequence.h"
-#include "FASTAReader.h"
-#include "SampleTools.h"
-#include "FastaIndex.h"
-#include "PartitionTools.h"
-
 using namespace std;
 
 using namespace seqan;

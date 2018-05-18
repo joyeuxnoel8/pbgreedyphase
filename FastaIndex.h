@@ -3,6 +3,9 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <assert.h>
 using namespace std;
 
 
@@ -30,7 +33,7 @@ class GFFastaIndex {
 		map<string, vector<long> >::iterator faiIt;
 		for (faiIt = fai.begin(); faiIt != fai.end(); ++faiIt) {
 			int i;
-			cout << (*faiIt).first << " ";
+			std::cout << (*faiIt).first << " ";
 			for (i = 0; i < 5; i++) {
 				cout << (*faiIt).second[i] << " ";
 			}
