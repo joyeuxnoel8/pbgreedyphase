@@ -49,7 +49,7 @@ partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage
 
 
 readToSNVList: ReadToSNVList.cpp PartitionTools.h FastaIndex.h SamUtils.h GenotypedRead.h SNVDB.h 
-	$(CPP) $(CPPOPTS) $< \
+	$(CPP) $(CPPOPTS) -static $< \
      -I $(SEQAN) \
      -I $(BLASR) \
      -I $(BOOST) \
