@@ -1,4 +1,4 @@
-all: boost_1_66_0/stage/lib/libboost_program_options.a vcflib_build_flag partitionByPhasedSNVs readToSNVList 
+all: boost_1_66_0/stage/lib/libboost_program_options.a vcflib/lib/libvcflib.a partitionByPhasedSNVs readToSNVList 
 
 SEQAN=seqan/include
 BOOST=boost_1_66_0
