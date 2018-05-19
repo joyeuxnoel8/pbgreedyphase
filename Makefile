@@ -16,16 +16,16 @@ $(ZLIB)/build/lib/libz.a:
 	cd $(ZLIB) && ./configure --static --prefix=$(PWD)/zlib/build && make -j 8 && make install
 
 VCFLIB_INCLUDES := "-I$(abspath vcflib/tabixpp/htslib) -I$(abspath vcflib/include) -L. -L$(abspath vcflib/tabixpp/htslib) -I$(abspath $(LIBBZ2)) -L$(abspath $(LIBBZ2))"
-VCFLIB_LDFLAGS := "-Llib -lvcflib -lhts -lpthread -lz -lm -llzma -lbz2"
-#VCFLIB_FLAGS = "-I$(abspath $(LIBBZ2))"
+VCFLIB_LDFLAGS := "-Llib -lvcflib -lhts -lpthread -lz -lm -L $(LZMA) -llzma -lbz2"
+
 
 $(LIBBZ2)/libbz2.a:
 	cd $(LIBBZ2) && make
 
 $(LZMA)/liblzma.a:
-	cd liblzma && ./configure --prefix=$(PWD)/lzma/build && make && make install
+	cd liblzma && ./configure --prefix=$(PWD)/lzma/build && make -j 8 && make install
 
-vcflib_build_flag: $(LIBBZ2)/libbz2.a
+vcflib/lib/libvcflib.a: $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a
 	make -C vcflib -j 8 INCLUDES=$(VCFLIB_INCLUDES) LDFLAGS=$(VCFLIB_LDFLAGS) CFLAGS=$(VCFLIB_INCLUDES)
 	touch $@
 
@@ -37,7 +37,7 @@ boost_1_66_0/bootstrap.sh:
 boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0/bootstrap.sh
 	cd boost_1_66_0 && ./bootstrap.sh --with-libraries=program_options && ./b2 --prefix=$PWD/build -j 4
 
-partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a  $(ZLIB)/build/lib/libz.a
+partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a  $(ZLIB)/build/lib/libz.a vcflib/lib/libvcflib.a
 	$(CPP) -g $(CPPOPTS) -static $^ \
      -I $(SEQAN) \
      -I $(BLASR) \
