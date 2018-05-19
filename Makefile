@@ -23,7 +23,7 @@ $(LIBBZ2)/libbz2.a:
 	cd $(LIBBZ2) && make
 
 $(LZMA)/liblzma.a:
-	cd liblzma && ./configure --prefix=$(PWD)/lzma/build && make -j 8 && make install
+	cd liblzma && ./configure --prefix=$(PWD)/lzma/build --disable-nls && make -j 8 && make install
 
 vcflib/lib/libvcflib.a: $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a
 	make -C vcflib -j 8 INCLUDES=$(VCFLIB_INCLUDES) LDFLAGS=$(VCFLIB_LDFLAGS) CFLAGS=$(VCFLIB_INCLUDES)
