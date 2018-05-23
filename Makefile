@@ -16,7 +16,7 @@ $(ZLIB)/build/lib/libz.a:
 	cd $(ZLIB) && ./configure --prefix=$(PWD)/zlib/build && make -j 8 && make install
 
 VCFLIB_INCLUDES := "-I$(abspath vcflib/tabixpp/htslib) -I$(abspath vcflib/include) -L. -L$(abspath vcflib/tabixpp/htslib) -I$(abspath $(LIBBZ2)) -L$(abspath $(LIBBZ2))"
-VCFLIB_LDFLAGS := "-Llib -lvcflib -lhts -lpthread -lz -lm -L $(LZMA) -llzma -lbz2"
+VCFLIB_LDFLAGS := "-Llib -lvcflib -lhts -lpthread -lz -lm -L$(LZMA) -llzma -lbz2"
 
 
 $(LIBBZ2)/libbz2.a:
