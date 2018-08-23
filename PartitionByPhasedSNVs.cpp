@@ -8,15 +8,9 @@
 #include "FastaIndex.h"
 #include "PartitionTools.h"
 #include "boost/program_options.hpp"
-#include "seqan/vcf_io.h"
-#include "seqan/seq_io.h"
-#include "seqan/bam_io.h"
-#include "seqan/align.h"
-#include "seqan/basic.h"
 #include <set>
 using namespace std;
 
-using namespace seqan;
 namespace po = boost::program_options;
 
 

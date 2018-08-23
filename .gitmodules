@@ -1,9 +1,6 @@
 [submodule "seqan"]
 	path = seqan
 	url = https://github.com/seqan/seqan.git
-[submodule "blasr"]
-	path = blasr
-	url = https://github.com/mchaisso/blasr.git
 [submodule "vcflib"]
 	path = vcflib
 	url = https://github.com/vcflib/vcflib.git

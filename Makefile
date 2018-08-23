@@ -3,7 +3,6 @@ all: boost_1_66_0/stage/lib/libboost_program_options.a vcflib/lib/libvcflib.a pa
 SEQAN=seqan/include
 BOOST=boost_1_66_0
 BOOSTLIB=$(BOOST)/stage/lib
-BLASR=blasr/common
 VCFLIB=vcflib
 HTSLIB=$(VCFLIB)/tabixpp/htslib
 CPPOPTS=  -g
@@ -39,8 +38,6 @@ boost_1_66_0/stage/lib/libboost_program_options.a: boost_1_66_0/bootstrap.sh
 
 partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage/lib/libboost_program_options.a $(LIBBZ2)/libbz2.a $(LZMA)/liblzma.a  $(ZLIB)/build/lib/libz.a vcflib/lib/libvcflib.a
 	$(CPP) -g $(CPPOPTS) $^ \
-     -I $(SEQAN) \
-     -I $(BLASR) \
      -I $(BOOST) \
      -I $(VCFLIB)/include -I $(HTSLIB) \
      -L $(BOOSTLIB) -l boost_program_options \
@@ -51,7 +48,6 @@ partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h boost_1_66_0/stage
 readToSNVList: ReadToSNVList.cpp PartitionTools.h FastaIndex.h SamUtils.h GenotypedRead.h SNVDB.h 
 	$(CPP) $(CPPOPTS)  $< \
      -I $(SEQAN) \
-     -I $(BLASR) \
      -I $(BOOST) \
      -L $(BOOSTLIB) -l boost_program_options \
      -o $@ 
