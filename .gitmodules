@@ -4,3 +4,6 @@
 [submodule "args"]
 	path = args
 	url = https://github.com/Taywee/args.git
+[submodule "seqan"]
+	path = seqan
+	url = https://github.com/seqan/seqan.git
