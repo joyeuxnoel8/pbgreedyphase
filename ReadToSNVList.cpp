@@ -1,14 +1,9 @@
 #include "args.hxx"
-#include "seqan/vcf_io.h"
-#include "seqan/seq_io.h"
-#include "seqan/bam_io.h"
-#include "seqan/align.h"
-#include "seqan/basic.h"
 #include <iostream>
 #include <string>
 #include <set>
-#include "FASTASequence.h"
-#include "FASTAReader.h"
+#include "blasr/FASTASequence.h"
+#include "blasr/FASTAReader.h"
 #include "GenotypedRead.h"
 #include "SamUtils.h"
 #include "SampleTools.h"
@@ -16,7 +11,7 @@
 #include "PartitionTools.h"
 
 using namespace std;
-using namespace seqan;
+
 long min(long a, long b) {
 	if (a <= b) {
 		return a;
@@ -26,10 +21,6 @@ long min(long a, long b) {
 }
 
 
-typedef std::pair<int, GenotypedRead*> PosRead;
-
-
-	
 
 class CommandLineParser {
 public:
