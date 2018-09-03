@@ -4,8 +4,6 @@
 #include "seqan/vcf_io.h"
 #include "seqan/seq_io.h"
 #include "seqan/bam_io.h"
-#include "seqan/align.h"
-#include "seqan/basic.h"
 using namespace seqan;
 int LookupPhasedSampleIndex(VcfIOContext<>::TNameStore &sampleNames, string phasedSample, int &sampleIndex) {
 	int i;

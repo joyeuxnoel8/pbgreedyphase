@@ -1,17 +1,17 @@
+
 #include <iostream>
 #include <string>
 #include <stdlib.h>
 #include "Variant.h"
 #include "FASTASequence.h"
 #include "FASTAReader.h"
-#include "SampleTools.h"
 #include "FastaIndex.h"
 #include "PartitionTools.h"
-#include "boost/program_options.hpp"
+#include "args.hxx"
 #include <set>
 using namespace std;
 
-namespace po = boost::program_options;
+
 
 
 long min(long a, long b) {
@@ -325,7 +325,6 @@ bool ParseRegion(string &region, string &chrom, int &start,int &end){
 
 class CommandLineParser {
 public:
-	po::options_description desc;
 	string vcfFileName;
 	string samFileName;
 	string refFileName;
@@ -349,130 +348,79 @@ public:
 	int nwWindow;
 	int writeInterval;
 	CommandLineParser() {
-		h1FileName = "";
-		h2FileName = "";
-		verbosity = 0;
-		block = 3;
-		minGenotyped = 2;
-		minScoreDifference= 1;
-		maxUnknown = 6;
-		unassigned = "";
-		region = "";
-		summaryFile = "";
-		phaseStatsFileName = "";
-		minDifference = 0;
-		nwWindow = 10;
-		phaseTag = "";
-		padding=0;
-		vcfFileName="";
-		refFileName="";
-		samFileName="";
-		int    regionPadding;
-		writeInterval=0;
-		assumeAutozygous=false;
-		desc.add_options()
-			("help", "Write help")
-			("vcf", po::value<string>(), "VCF file. For now just het SNVs.")
-			("sam", po::value<string>(), "SAM file")
-			("ref", po::value<string>(), "Reference file")
-			("tag", po::value<string>(), "Store haplotype in SAM optional field with this 2-character tag.")
-			("h1", po::value<string>(), "Haplotype 1")
-			("h2", po::value<string>(), "Haplotype 2")
-			("verbosity", po::value<int>(),"Verbosity")
-			("pad", po::value<int>(), "padding around region.")
-			("block", po::value<int>(), "Minimum adjacent block size to record SNV status")
-			("minDifference", po::value<int>(), "Minimum difference between genotype count")
-			("minScoreDifference", po::value<int>(), "Minimum score difference between ref/alt realignment")
-			("nw-window", po::value<int>(), "Window to do Needleman-Wunsch alignment in")			
-			("sample", po::value<string>(), "Sample to look up for phasing status.")
-			("maxUnknown", po::value<int>(), "Maximum sites with unknown/alt genotype")
-			("minGenotyped", po::value<int>(), "Minimum genotyped sites per read")
-			("unassigned", po::value<string>(), "Output unassigned reads here")
-			("rgn", po::value<string>(), "Region of reference to phase")
-			("summary",  po::value<string>(), "Write a summary of phased reaads to this file.")
-			("phaseStats",  po::value<string>(), "Write the number of h0/h1 matches to this file per read.")
-			("null-assumes-autozygous",  "If there are no values in the VCF, assume autozygous region.")
-			("writeInterval", "Write an interval instead of the whole sam line.")
-			;
 	}
 
-	
-	template<typename T_Value>
-	bool SetRequiredValue(string key, po::variables_map &vm, T_Value &value) {
-		string res;
-		if (vm.count(key.c_str())) {
-			value =vm[key.c_str()].as<T_Value>(); 
-			return true;
-		} else {
-			cout << desc << endl;
-			cout << key << " is required.\n";
-			exit(1);
-		}
-	}
-	
-	template<typename T_Value>
-	void SetOptionalValue(string key, po::variables_map &vm, T_Value &value) {
-		if (vm.count(key.c_str())) {
-			value = vm[key.c_str()].as<T_Value>();
-		}
-	}
 
-	void SetOptionalFlag(string key, po::variables_map &vm, bool &value) {
-		if (vm.count(key.c_str())) {
-   		value = true;
-	  }
-	}
-		
+	int ParseCommandLine(int ac, char* av[]) {
+		args::ArgumentParser parser("Greedy partitioning of reads by heterozygous SNV overlap", "");
 
-	void ParseCommandLine(int ac, char* av[]) {
-		po::variables_map vm;        
+
+    args::HelpFlag helpOpt(parser, "help", "Display this help menu", {'h', "help"});
+    args::ValueFlag<string> vcfOpt(parser, "vcf", "VCF file. For now just het SNVs.", {"vcf"}, "", args::Options::Required);
+    args::ValueFlag<string> samOpt(parser, "sam", "SAM file. ", {"sam"}, "", args::Options::Required);
+    args::ValueFlag<string> refOpt(parser, "ref", "Reference. ", {"ref"}, "", args::Options::Required);
+    args::ValueFlag<string> phaseTagOpt(parser, "tag", "Store haplotype in SAM optional field with this 2-character tag.", {"tag"},"");
+    args::ValueFlag<string> h1Opt(parser, "h1Opt", "Haplotype 1 output", {"h1"}, "");
+    args::ValueFlag<string> h2Opt(parser, "h2Opt", "Haplotype 2 output", {"h2"}, "");
+		args::ValueFlag<int> verbosityOpt(parser, "verbosity", "Verbosity of output", {"verbosity"}, 0);
+		args::ValueFlag<int> paddingOpt(parser, "pad", "padding around region", {"pad"}, 0);
+		args::ValueFlag<int> blockOpt(parser, "block", "Minimum adjacent block size to record SNV status", {"pad"}, 3);
+	  args::ValueFlag<int> minDifferenceOpt(parser, "minDifference", "Minimum difference between genotype count", {"minDifference"}, 0);
+		args::ValueFlag<int> minScoreDifferenceOpt(parser, "minScoreDifference", "Minimum score difference between ref/alt realignment", {"minScoreDifference"});
+		args::ValueFlag<int> nwWindowOpt(parser, "nwWindow", "Prefix and suffix of Needleman-Wunsch alignment", {"nw-window"}, 10);
+		args::ValueFlag<string> sampleOpt(parser, "sample", "Sample to look up haplotype", {"sample"}, "");
+		args::ValueFlag<int> maxUnknownOpt(parser, "maxUnknown", "Maximum sites with unknown/alt genotype", {"maxUnknown"}, 6);
+		args::ValueFlag<int> 	minGenotypedOpt(parser, "minGenotyped", "Minimum genotyped sites per read", {"minGenotyped"}, 2);
+		args::ValueFlag<string> unassignedOpt(parser, "unassigned", "Output unassigned reads here", {"unassigned"}, "");
+		args::ValueFlag<string> regionOpt(parser, "rgn", "Region of reference to phase", {"rgn"}, "");
+		args::ValueFlag<string> summaryFileOpt(parser, "summary", "Write a summary of phased reaads to this file.", {"summary"}, "");
+		args::ValueFlag<string> phaseStatsFileNameOpt(parser, "phaseStats", "Write the number of h0/h1 matches to this file per read.", {"phaseStats"}, "");
+		args::Flag assumeAutozygousOpt(parser, "assumeAutozygousOpt", "if no values in the VCF, assume autozygous region.", {"assumeAutozygous"}, false);
+		args::Flag writeIntervalOpt(parser, "writeInterval",  "write interval instead of the whole sam line.", {"writeInterval"},false);
+
 		try {
-			po::store(po::parse_command_line(ac, av, desc), vm);
-			po::notify(vm);    
-			
-			if (vm.count("help")) {
-				cout << desc << "\n";
-				return;
-			}
-			if (vm.count("writeInterval")) {
-				writeInterval = 1;
-			}
-			SetRequiredValue("vcf", vm, vcfFileName);
-			SetRequiredValue("sam", vm, samFileName);
-			SetRequiredValue("ref", vm, refFileName);
+			const std::vector<std::string> arguments(av + 1, av + ac);
 
-			
-			SetOptionalValue("sample", vm, sample);
-			//
-			// Parse optional sargs.
-			//
-			SetOptionalValue("pad", vm, padding);			
-			SetOptionalValue("rgn", vm, region);
-			SetOptionalValue("tag", vm, phaseTag);
-			SetOptionalValue("h1", vm, h1FileName);
-			SetOptionalValue("h2", vm, h2FileName);
-			SetOptionalValue("verbosity", vm, verbosity);
-			SetOptionalValue("block", vm, block);
-			SetOptionalValue("minDifference", vm, minDifference);			
-			SetOptionalValue("maxUnknown", vm, maxUnknown);
-			SetOptionalValue("minGenotyped", vm, minGenotyped);
-			SetOptionalValue("unassigned", vm, unassigned);
-			SetOptionalValue("phaseStats",vm, phaseStatsFileName);
-			SetOptionalValue("chrom",vm, chromosome);
-			SetOptionalValue("summary",vm, summaryFile);
-			SetOptionalValue("nw-window",vm,nwWindow);
-			SetOptionalFlag("null-assumes-autozygous",vm, assumeAutozygous);
-		}
+			parser.ParseCLI(arguments);
+    }
+    catch (args::Completion e)
+			{
+        std::cout << e.what();
+        return 0;
+			}
+    catch (args::Help)
+			{
+        std::cout << parser;
+        return 0;
+			}
+    catch (args::ParseError e)
+			{
+        std::cerr << e.what() << std::endl;
+        std::cerr << parser;
+        return 1;
+			}
+	
+		vcfFileName=vcfOpt.Get();
+		samFileName=samOpt.Get();
+		refFileName=refOpt.Get();
+		h1FileName = h1Opt.Get();
+		h2FileName = h2Opt.Get();
+		verbosity = verbosityOpt.Get();
+		block = blockOpt.Get();
+		minGenotyped = minGenotypedOpt.Get();
+		minScoreDifference= minScoreDifferenceOpt.Get();
+		maxUnknown = maxUnknownOpt.Get();
+		unassigned = unassignedOpt.Get();
+		region = regionOpt.Get();
+		summaryFile = summaryFileOpt.Get();
+		phaseStatsFileName = phaseStatsFileNameOpt.Get();
+		minDifference = minDifferenceOpt.Get();
+		nwWindow = nwWindowOpt.Get();
+		phaseTag = phaseTagOpt.Get();
+		padding=paddingOpt.Get();
 
-		catch(exception& e) {
-			cerr << "error: " << e.what() << "\n";
-			exit(1);
-			return;
-		}
-		catch(...) {
-			cerr << "Exception of unknown type!\n";
-			exit(1);
-		}
+		writeInterval=writeIntervalOpt.Get();
+		assumeAutozygous=assumeAutozygousOpt.Get();
 	}
 	
 };
@@ -647,7 +595,7 @@ void FilterList(vector<T> &v, vector<bool> &retain) {
 }
 
 int main (int ac, char* av[]) {
-	po::options_description desc("Partition by SNV options");
+	//po::options_description desc("Partition by SNV options");
 
 	CommandLineParser	args;
 	args.ParseCommandLine(ac, av);
@@ -696,7 +644,7 @@ int main (int ac, char* av[]) {
 	vcflib::VariantCallFile vcf;
 	vcf.open(args.vcfFileName);
 	vcflib::Variant record(vcf);
-	//	while (!atEnd(vcfFile)) {
+
 	int i;
 	while (vcf.getNextVariant(record)) {
 
@@ -752,7 +700,6 @@ int main (int ac, char* av[]) {
 
 	// Copy header.
 
-	//	readHeader(header, bamFileIn);
 	SAMHeader samHeader;
 	ReadHeader( bamFileIn, samHeader);
 
@@ -772,8 +719,6 @@ int main (int ac, char* av[]) {
 			PrintSAMHeader(samHeader, unassigned);
 		}
 	}
-
-	typedef Row<Align<IupacString> >::Type TRow; // gapped sequence type
 
 	int maybeStored = 0;
 
@@ -822,7 +767,6 @@ int main (int ac, char* av[]) {
 			break;
 		}
 		
-		Align<IupacString> align;
 		
 		if (samRecord.chrom != "*") {
 			int firstOp = 0;

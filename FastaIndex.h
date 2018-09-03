@@ -61,9 +61,7 @@ class GFFastaIndex {
 		long startLine = start / lineLen;
 		long endLine   = end   / lineLen;
 		long startLinePos = start % lineLen;
-		long endLinePos = end % lineLen;
-		
-
+		long endLinePos = end % lineLen;		
     long startFilePos = chrStart + startLine * fileLineLength + startLinePos;
 		long endFilePos   = chrStart + endLine * fileLineLength  + endLinePos;
 

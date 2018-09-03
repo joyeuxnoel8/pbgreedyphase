@@ -1,4 +1,4 @@
-#include "boost/program_options.hpp"
+#include "args.hxx"
 #include "seqan/vcf_io.h"
 #include "seqan/seq_io.h"
 #include "seqan/bam_io.h"
@@ -14,8 +14,6 @@
 #include "SampleTools.h"
 #include "SNVDB.h"
 #include "PartitionTools.h"
-
-namespace po = boost::program_options;
 
 using namespace std;
 using namespace seqan;
@@ -35,7 +33,7 @@ typedef std::pair<int, GenotypedRead*> PosRead;
 
 class CommandLineParser {
 public:
-	po::options_description desc;
+
 	string vcfFileName;
 	string samFileName;
 	string refFileName;
@@ -54,86 +52,67 @@ public:
 		minCoverage = 10;
 		minFraction =0.25;
 		refOffset=0;
-				minScoreDifference= 2;
-				noRealign=false;
+		minScoreDifference= 2;
+		noRealign=false;
 
-		desc.add_options()
-			("help", "Write help")
-			("vcf", po::value<string>(), "VCF file. For now just het SNVs.")
-			("nft", po::value<string>(), "Nucleotide frequency table.")
-			("sam", po::value<string>(), "SAM file.")
-			("ref", po::value<string>(), "Reference file.")
-			("out", po::value<string>(), "Output file.")
-			("minScoreDifference", po::value<int>(), "Minimum score difference between ref/alt realignment")
-			("nftOut", po::value<string>(), "Output filtered nucleotide frequency.")
-			("no-realign", "Realign to target replaced by vcf difference.")
-			("minFraction", po::value<float>(), "Minimum fraction of coverge to represent.")
-			("minCoverage", po::value<int>(), "Minimum absolute coverage for het call.")
-			("phasedSample", po::value<string>(), "Sample to look up for phasing status.")
-			("refOffset", po::value<int>(), "Offset into reference contig")
-			;
 	}
 
-	template<typename T_Value>
-	bool SetRequiredValue(string key, po::variables_map &vm, T_Value &value) {
-		string res;
-		if (vm.count(key.c_str())) {
-			value =vm[key.c_str()].as<T_Value>(); 
-			return true;
-		} else {
-			cout << desc << endl;
-			cout << key << " is required.\n";
-			exit(1);
-		}
-	}
-	
-	template<typename T_Value>
-	void SetOptionalValue(string key, po::variables_map &vm, T_Value &value) {
-		if (vm.count(key.c_str())) {
-			value = vm[key.c_str()].as<T_Value>();
-		}
-	}		
-		
+	int ParseCommandLine(int ac, char* av[]) {
+		args::ArgumentParser parser("Create a list of the SNVs a read overlaps", "");
+    args::HelpFlag helpOpt(parser, "help", "Display this help menu", {'h', "help"});
 
-	void SetOptionalFlag(string key, po::variables_map &vm, bool &value) {
-		if (vm.count(key.c_str())) {
-   		value = true;
-	  }
-	}
+    args::ValueFlag<string> samOpt(parser, "sam", "SAM file. ", {"sam"}, "", args::Options::Required);
+    args::ValueFlag<string> refOpt(parser, "ref", "Reference. ", {"ref"}, "", args::Options::Required);
+    args::ValueFlag<string> outOpt(parser, "out", "Output file. ", {"out"}, "", args::Options::Required);
 
-	void ParseCommandLine(int ac, char* av[]) {
-		po::variables_map vm;        
+    args::ValueFlag<string> vcfOpt(parser, "vcf", "VCF file. For now just het SNVs.", {"vcf"}, "");
+    args::ValueFlag<string> nftOpt(parser, "nft", "Nucleotide frequency table. ", {"nft"}, "");
+    args::ValueFlag<string> phasedSampleOpt(parser, "phasedSample", "Sample in vcf. ", {"sample"}, "");
+		args::ValueFlag<int>	  minScoreDifferenceOpt(parser, 
+																									"minScoreDifference",
+																									"Minimum score difference between ref/alt realignment",
+																									{"minScoreDifference"}, 2);
+    args::Flag              noRealignOpt(parser, "no-realign", "Realign to target replaced by vcf difference.", {"no-realign"},false);
+    
+    args::ValueFlag<string> nftOutOpt(parser, "nftOut", "Nucleotide frequency table. ", {"nftOut"}, "");
+		args::ValueFlag<float> minFractionOpt(parser, "minFraction", "Minimum fraction of coverge to represent.", {"minFraction"}, 0.25);
+    args::ValueFlag<int> minCoverageOpt(parser, "minCoverage", "Minimum absolute coverage for het call.", {"minCoverage"},10);
+    args::ValueFlag<int> refOffsetOpt(parser, "refOffset", "Offset into reference contig.", {"refOffset"}, 0);
 		try {
-			po::store(po::parse_command_line(ac, av, desc), vm);
-			po::notify(vm);    
-			
-			if (vm.count("help")) {
-				cout << desc << "\n";
-				return;
+			const std::vector<std::string> arguments(av + 1, av + ac);
+
+			parser.ParseCLI(arguments);
+    }
+    catch (args::Completion e)
+			{
+        std::cout << e.what();
+        return 0;
+			}
+    catch (args::Help)
+			{
+        std::cout << parser;
+        return 0;
+			}
+    catch (args::ParseError e)
+			{
+        std::cerr << e.what() << std::endl;
+        std::cerr << parser;
+        return 1;
 			}
 
-			SetRequiredValue("sam", vm, samFileName);
-			SetRequiredValue("ref", vm, refFileName);
-			SetRequiredValue("out", vm, outFileName);
-			SetOptionalValue("phasedSample", vm, phasedSample);
-			SetOptionalValue("vcf", vm, vcfFileName);
-			SetOptionalValue("nft", vm, nfqFileName);
-			SetOptionalValue("nftOut", vm, nfqOutFileName);
-			SetOptionalValue("minFraction", vm, minFraction);
-			SetOptionalValue("minCoverage", vm, minCoverage);
-			SetOptionalValue("refOffset", vm, refOffset);
-			SetOptionalFlag("no-realign",vm, noRealign);			
-		}
-
-		catch(exception& e) {
-			cerr << "error: " << e.what() << "\n";
-			exit(1);
-			return;
-		}
-		catch(...) {
-			cerr << "Exception of unknown type!\n";
-			exit(1);
-		}
+		vcfFileName = vcfOpt.Get();
+		samFileName = samOpt.Get();
+		refFileName = refOpt.Get();
+		outFileName = outOpt.Get();
+		nfqFileName = nftOpt.Get();
+		nfqOutFileName = nftOutOpt.Get();
+		phasedSample = phasedSampleOpt.Get();
+		minFraction = minFractionOpt.Get();
+		minCoverage = minCoverageOpt.Get();
+		refOffset = refOffsetOpt.Get();
+		minScoreDifference = minScoreDifferenceOpt.Get();
+		noRealign = noRealignOpt.Get();
+	 
 	}
 	
 };
@@ -214,8 +193,6 @@ int main (int ac, char* av[]) {
 	nucIndex[(int)'C'] = 1;
 	nucIndex[(int)'G'] = 2;
 	nucIndex[(int)'T'] = 3;
-
-	po::options_description desc("Read to SNV list");
 
 	CommandLineParser	args;
 	args.ParseCommandLine(ac, av);

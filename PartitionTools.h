@@ -3,8 +3,8 @@
 
 #include <string>
 #include <vector>
-
 #include <ctype.h>
+
 using namespace std;
 
 string JoinPrefixSuffix(string p, char c, string s ) {
