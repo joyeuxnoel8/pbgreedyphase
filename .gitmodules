@@ -1,18 +1,6 @@
-[submodule "seqan"]
-	path = seqan
-	url = https://github.com/seqan/seqan.git
 [submodule "vcflib"]
 	path = vcflib
 	url = https://github.com/vcflib/vcflib.git
-[submodule "liblzma"]
-	path = liblzma
-	url = https://github.com/kobolabs/liblzma.git
-[submodule "bzip2-1.0.6"]
-	path = bzip2-1.0.6
-	url = https://github.com/enthought/bzip2-1.0.6.git
-[submodule "zlib"]
-	path = zlib
-	url = https://github.com/madler/zlib.git
 [submodule "args"]
 	path = args
 	url = https://github.com/Taywee/args.git
