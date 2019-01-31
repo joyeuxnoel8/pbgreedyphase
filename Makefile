@@ -5,7 +5,7 @@ CONDA_LIB=testlib #$(CONDA_PREFIX)/lib
 HTSINC=$(CONDA_PREFIX)/include
 VCFLIB=vcflib
 
-CPPOPTS= -O2
+CPPOPTS= -g -O2
 # -D_GLIBCXX_USE_CXX11_ABI=0
 
 
@@ -23,7 +23,7 @@ vcflib/lib/libvcflib.a:
 #     -l z -l pthread -lcurl -lssl -lcrypto -ldl  -llzma -lbz2 \
 
 partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h vcflib/lib/libvcflib.a
-	$(CPP) $(CPPOPTS) -std=c++11 $<  \
+	$(CPP) $(CPPOPTS) $<  \
      -o $@ \
      -I args \
      -I blasr \

@@ -138,7 +138,7 @@ public:
 				refAlignLength += lengths[i];
 			}
 		}
-		assert(tLen == refAlignLength);
+		assert(tLen == 0 or tLen == refAlignLength);
 		return refAlignLength;
 	}
 };
@@ -372,7 +372,7 @@ public:
 		args::ValueFlag<int> maxUnknownOpt(parser, "maxUnknown", "Maximum sites with unknown/alt genotype", {"maxUnknown"}, 6);
 		args::ValueFlag<int> 	minGenotypedOpt(parser, "minGenotyped", "Minimum genotyped sites per read", {"minGenotyped"}, 2);
 		args::ValueFlag<string> unassignedOpt(parser, "unassigned", "Output unassigned reads here", {"unassigned"}, "");
-		args::ValueFlag<string> regionOpt(parser, "rgn", "Region of reference to phase", {"rgn"}, "");
+		args::ValueFlag<string> regionOpt(parser, "rgn", "Region of reference to phase. This will save time by not reading in the entire reference.", {"rgn"}, "");
 		args::ValueFlag<string> summaryFileOpt(parser, "summary", "Write a summary of phased reaads to this file.", {"summary"}, "");
 		args::ValueFlag<string> phaseStatsFileNameOpt(parser, "phaseStats", "Write the number of h0/h1 matches to this file per read.", {"phaseStats"}, "");
 		args::Flag assumeAutozygousOpt(parser, "assumeAutozygousOpt", "if no values in the VCF, assume autozygous region.", {"assumeAutozygous"}, false);
@@ -421,6 +421,7 @@ public:
 
 		writeInterval=writeIntervalOpt.Get();
 		assumeAutozygous=assumeAutozygousOpt.Get();
+		return 1;
 	}
 	
 };
