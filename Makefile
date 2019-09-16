@@ -5,7 +5,7 @@ CONDA_LIB=testlib #$(CONDA_PREFIX)/lib
 HTSINC=$(CONDA_PREFIX)/include
 VCFLIB=vcflib
 
-CPPOPTS= -g -O2
+CPPOPTS=  -O2
 # -D_GLIBCXX_USE_CXX11_ABI=0
 
 
@@ -22,7 +22,11 @@ vcflib/lib/libvcflib.a:
 #     -L $(CONDA_LIB) \
 #     -l z -l pthread -lcurl -lssl -lcrypto -ldl  -llzma -lbz2 \
 
-partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h vcflib/lib/libvcflib.a
+htslib/lib/libhts.a:
+	cd htslib && autoheader && autoconf && ./configure --disable-s3 --disable-lzma --disable-bz2 --prefix=$(PWD)/htslib/ && make -j 4 && make install
+
+
+partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h vcflib/lib/libvcflib.a htslib/lib/libhts.a
 	$(CPP) $(CPPOPTS) $<  \
      -o $@ \
      -I args \

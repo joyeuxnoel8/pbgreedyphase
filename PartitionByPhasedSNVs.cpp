@@ -9,10 +9,69 @@
 #include "PartitionTools.h"
 #include "args.hxx"
 #include <set>
+#include <unistd.h> 
+#include <ext/stdio_filebuf.h>
+#include <sys/wait.h>
+
+
+KSEQ_INIT(gzFile, gzread)
 using namespace std;
+//ostream *
 
+typedef __gnu_cxx::stdio_filebuf<char> char_buf;
 
+void CreateOutputStream(string &outFileName, ostream *&os, int &pipe_filedes, char_buf *&cb) {
+	int len=outFileName.size();
+	if (len > 4 and outFileName.substr(len-4) == ".bam") {
 
+			int need_shell, pf[2];
+			pid_t pid;
+			int pfd[2];
+			if (pipe(pfd) != 0) return;
+			pipe_filedes=pfd[1];
+			pid = fork();
+			if (pid == -1) { /* vfork() error */
+				close(pfd[0]); close(pfd[1]);
+				return;
+			}
+			if (pid == 0) { /* the child process */
+				char **argv; /* FIXME: I do not know if this will lead to a memory leak */
+				//				close(pfd[1]);
+				dup2(pfd[0], STDIN_FILENO);
+        cerr << "pfd0 " << pfd[0] << endl;
+				
+				close(pfd[1]);
+
+        cerr << "pipe_filedes " << pipe_filedes << endl;				
+				string command = "samtools view -b - -o " + outFileName ;
+				
+				cerr << "child process starting shell " << command << endl;
+
+				//				int ret= system(command.c_str());
+				
+				int ret=	execl("/bin/sh", "sh", "-c", command.c_str(), NULL);
+				cerr << "done with system call " << ret << endl;
+
+				cerr << "done with shell execution" << command << endl;
+				//				close(pfd[0]);				
+				exit(0);
+				
+				
+			}
+			else {
+				// 
+				// Parent, copy over stream buf
+				//
+				cb = new char_buf(pfd[1], std::ios::out); 
+				os = new ostream(cb);
+			}
+	} else {
+		ofstream *outFile = new ofstream(outFileName.c_str());
+		cb=NULL;
+		os=outFile;
+	}
+	
+}
 
 long min(long a, long b) {
 	if (a <= b) {
@@ -343,6 +402,7 @@ public:
 	string summaryFile;
 	string phaseStatsFileName;
 	string chromosome;
+
 	bool assumeAutozygous;
 	int padding;
 	int nwWindow;
@@ -362,6 +422,7 @@ public:
     args::ValueFlag<string> phaseTagOpt(parser, "tag", "Store haplotype in SAM optional field with this 2-character tag.", {"tag"},"");
     args::ValueFlag<string> h1Opt(parser, "h1Opt", "Haplotype 1 output", {"h1"}, "");
     args::ValueFlag<string> h2Opt(parser, "h2Opt", "Haplotype 2 output", {"h2"}, "");
+
 		args::ValueFlag<int> verbosityOpt(parser, "verbosity", "Verbosity of output", {"verbosity"}, 0);
 		args::ValueFlag<int> paddingOpt(parser, "pad", "padding around region", {"pad"}, 0);
 		args::ValueFlag<int> blockOpt(parser, "block", "Minimum adjacent block size to record SNV status", {"pad"}, 3);
@@ -400,11 +461,12 @@ public:
         return 1;
 			}
 	
-		vcfFileName=vcfOpt.Get();
-		samFileName=samOpt.Get();
-		refFileName=refOpt.Get();
+		vcfFileName = vcfOpt.Get();
+		samFileName = samOpt.Get();
+		refFileName = refOpt.Get();
 		h1FileName = h1Opt.Get();
 		h2FileName = h2Opt.Get();
+
 		verbosity = verbosityOpt.Get();
 		block = blockOpt.Get();
 		minGenotyped = minGenotypedOpt.Get();
@@ -412,6 +474,7 @@ public:
 		maxUnknown = maxUnknownOpt.Get();
 		unassigned = unassignedOpt.Get();
 		region = regionOpt.Get();
+		sample = sampleOpt.Get();
 		summaryFile = summaryFileOpt.Get();
 		phaseStatsFileName = phaseStatsFileNameOpt.Get();
 		minDifference = minDifferenceOpt.Get();
@@ -496,10 +559,10 @@ int StoreGenotype(string gt, int &gt1, int &gt2) {
 	}
 }
 
-bool OpenFile(string filename, ofstream &file) {
+bool OpenFile(string &filename, ostream *&file, int &pfd, char_buf *&cb) {
 	if (filename == "") return false; 
-	file.open(filename.c_str());
-	if (!file.good()) {
+	CreateOutputStream(filename, file, pfd, cb);
+	if (!file->good()) {
 		cout << "Could not open " << filename << endl;
 		exit(1);
 	}
@@ -600,13 +663,16 @@ int main (int ac, char* av[]) {
 
 	CommandLineParser	args;
 	args.ParseCommandLine(ac, av);
-	int sampleIndex;
 
 	ifstream bamFileIn(args.samFileName.c_str());
 	
 	vector<FASTASequence> genome;
-	FASTAReader reader;
-	reader.SetToUpper();
+
+	gzFile reader;
+	kseq_t *kSeq;
+
+
+	//	reader.SetToUpper();
 	
 	GFFastaIndex fastaIndex;
 	fastaIndex.Initialize(args.refFileName);
@@ -625,22 +691,38 @@ int main (int ac, char* av[]) {
 		regionEnd   += args.padding;
 	}
 	else {
-		reader.Initialize(args.refFileName);
-		reader.ReadAllSequences(genome);
+		//		reader.Initialize(args.refFileName);
+		//		reader.ReadAllSequences(genome);
+		
+		reader = gzopen(args.refFileName.c_str(), "r");
+		kSeq = kseq_init(reader);
+		while ( kseq_read(kSeq) >= 0) { // each kseq_read() call reads one query sequence
+				int last=genome.size();
+				genome.resize(genome.size()+1);
+				int titleLen = strlen(kSeq->name.s);
+				genome[last].CopyTitle(kSeq->name.s, titleLen);
+				genome[last].length = kSeq->seq.l;
+				genome[last].seq = new Nucleotide[kSeq->seq.l];
+				for (int i=0;i<kSeq->seq.l;i++) { genome[last].seq[i] = toupper(kSeq->seq.s[i]);}
+		}					
 	}
 
 	
-	sampleIndex = 0;
-	ofstream haplotypeOut[2];
+	ostream *haplotypeOut[2];
 	ofstream phaseStatsOut;
 	if (args.phaseStatsFileName != "") {
 		phaseStatsOut.open(args.phaseStatsFileName.c_str());
 	}
 	int nEntry =  0;
 	SNVDB snvDb;
-
-	bool useH1 = OpenFile(args.h1FileName, haplotypeOut[0]);
-	bool useH2 = OpenFile(args.h2FileName, haplotypeOut[1]);
+	char_buf *cb[2];
+	int pfd[2];
+	pfd[0] = -1;
+	pfd[1] = -1;
+	
+	
+	bool useH1 = OpenFile(args.h1FileName, haplotypeOut[0], pfd[0], cb[0]);
+	bool useH2 = OpenFile(args.h2FileName, haplotypeOut[1], pfd[1], cb[1]);
 
 	vcflib::VariantCallFile vcf;
 	vcf.open(args.vcfFileName);
@@ -653,7 +735,6 @@ int main (int ac, char* av[]) {
 		string alt = record.alt[0];
 		string chrom = record.sequenceName;
 		int pos = record.position;
-			
 
 		if (ref.size() == alt.size() and ref.size() == 1) {
 			int recordLength = ref.size();
@@ -713,7 +794,7 @@ int main (int ac, char* av[]) {
 	ofstream unassigned;
 	if (args.writeInterval == false){ 
 		for (i = 0; i< (useH1 + useH2); i++) {
-			PrintSAMHeader(samHeader, haplotypeOut[i]);
+			PrintSAMHeader(samHeader, *haplotypeOut[i]);
 		}
 		unassigned.open(args.unassigned.c_str());
 		if (args.unassigned != "") {
@@ -751,12 +832,16 @@ int main (int ac, char* av[]) {
 		if (contigLength < regionEnd || regionEnd == -1) {
 			regionEnd = contigLength;
 			cout << "set region end." <<endl;
-			exit(0);
+			exit(1);
+			
 		}
 		fastaIndex.GetSeq(refChrom, regionChrom, regionStart, regionEnd);
 	}
 	
 	int alnIndex = 0;
+	long nBases  = 0, trip=0;
+	
+	
 	while (bamFileIn)  {
 		SAMRecord samRecord;
 		bool result;
@@ -768,7 +853,13 @@ int main (int ac, char* av[]) {
 			break;
 		}
 		
-		
+		nBases += samRecord.seq.size();
+		trip+=samRecord.seq.size();
+
+		if (trip > 1000000000) {
+			cerr << "Processed " << nBases / 1000000000 << "GB" << "\t" << nH1 << "\t" << nH2  << "\t" << nUnk <<endl;
+			trip=0;
+		}
 		if (samRecord.chrom != "*") {
 			int firstOp = 0;
 			int totalClipped = 0;
@@ -820,7 +911,7 @@ int main (int ac, char* av[]) {
 			int span = endVar - startVar;
 
 			int haplotype = 2;
-			int h0=0,h1=0,h2=0;
+			int h0=0,h1=0,hUn=0;
 						
 			if (args.verbosity > 0) {
 				cerr << samRecord.title << " overlaps " << endVar - startVar << " variants" << endl;
@@ -898,7 +989,7 @@ int main (int ac, char* av[]) {
 								}
 							}
 							else {
-								h2++;
+								hUn++;
 							}
 							
 							if (args.verbosity > 0) {
@@ -954,7 +1045,7 @@ int main (int ac, char* av[]) {
 				}
 			}
 			if (args.phaseStatsFileName != "") {
-				phaseStatsOut << haplotype << "\t" << h0 << "\t" << h1 << "\t" << h2 << "\t" << refAlnLength << "\t"
+				phaseStatsOut << haplotype << "\t" << h0 << "\t" << h1 << "\t" << hUn << "\t" << refAlnLength << "\t"
 											<< samRecord.chrom << ":" << refAlnStart << "-" << refAlnStart+refAlnLength << "\t"
 											<< samRecord.title << "\t" << tPos + refAlnStart <<	endl;
 			}
@@ -962,10 +1053,10 @@ int main (int ac, char* av[]) {
 			if (splitHaplotypes) {
 				if (haplotype == 0 || haplotype  == 1) {
 					if (args.writeInterval == false) {
-						haplotypeOut[haplotype] << samRecord.samLine << endl;
+						*haplotypeOut[haplotype] << samRecord.samLine << endl;
 					}
 					else {
-						haplotypeOut[haplotype] << samRecord.chrom << "\t" << refAlnStart << "\t" << refAlnStart + refAlnLength << "\t" << samRecord.title << endl;
+						*haplotypeOut[haplotype] << samRecord.chrom << "\t" << refAlnStart << "\t" << refAlnStart + refAlnLength << "\t" << samRecord.title << endl;
 					}
 				}
 				else {
@@ -980,11 +1071,11 @@ int main (int ac, char* av[]) {
 					else {
 						if (args.writeInterval == false) {
 							int h;
-							for (h=0;h<2;h++) { haplotypeOut[h] << samRecord.samLine << endl;	}
+							for (h=0;h<2;h++) { *haplotypeOut[h] << samRecord.samLine << endl;	}
 						}
 						else {
 							int h;
-							for (h=0;h<2;h++) { haplotypeOut[h] << samRecord.chrom << "\t" << refAlnStart << "\t" << refAlnStart + refAlnLength << "\t" << samRecord.title << endl;}
+							for (h=0;h<2;h++) { *haplotypeOut[h] << samRecord.chrom << "\t" << refAlnStart << "\t" << refAlnStart + refAlnLength << "\t" << samRecord.title << endl;}
 						}
 					}
 				}
@@ -992,8 +1083,8 @@ int main (int ac, char* av[]) {
 			else {
 				// add the haplotype tag to this file.
 				if (args.writeInterval == false) {
-					haplotypeOut[0] << samRecord.samLine << "\t" << args.phaseTag << ":Z:" << (int)haplotype
-													<< "," << h0  << "," << h1 <<"," << h2  << endl;
+					*haplotypeOut[0] << samRecord.samLine << "\t" << args.phaseTag << ":Z:" << (int)haplotype
+													<< "," << h0  << "," << h1 <<"," << hUn  << endl;
 				}
 			}
 		}
@@ -1007,7 +1098,20 @@ int main (int ac, char* av[]) {
 								<< "\tnUnk\t" << nUnk << "\tsites:\t"
 								<< snvDb.size << endl;
 	}
-
+	delete haplotypeOut[0];
+	delete haplotypeOut[1];
+	cerr << "pfd 0 " << pfd[0] << endl;
 	
+	if (pfd[0] != -1) close(pfd[0]);
+	if (pfd[1] != -1) close(pfd[1]);
+
+
+	cerr << "waiting " << endl;
+	int status, pid;	
+	pid=wait(&status);
+	cerr << "waited on " << pid << " got " << status << endl;
+	pid=wait(&status);
+	cerr << "waited 2 on " << pid << " got " << status << endl;
+	//	return 0;
 }
 
