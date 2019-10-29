@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <string>
 #include <stdlib.h>
@@ -197,7 +196,9 @@ public:
 				refAlignLength += lengths[i];
 			}
 		}
-		assert(tLen == 0 or tLen == refAlignLength);
+		if (tLen != 0 and tLen == refAlignLength) {
+			return -1;
+		}
 		return refAlignLength;
 	}
 };
@@ -783,7 +784,7 @@ int main (int ac, char* av[]) {
 	// Copy header.
 
 	SAMHeader samHeader;
-	ReadHeader( bamFileIn, samHeader);
+	ReadHeader( bamFileIn, samHeader); 
 
 	map<string, int> refIndex;
 	BuildNameToIndexMap(samHeader, genome, refIndex);
@@ -867,6 +868,9 @@ int main (int ac, char* av[]) {
 			int refAlnStart  = max(samRecord.refPos, regionStart);
 			int chromIndex   = refIndex[samRecord.chrom];
 			
+			if (refAlnLength <= 0) {
+				continue;
+			}
 			string tAlnStr, qAlnStr;
 			char *refPtr;
 			if (args.region == "") {
