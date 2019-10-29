@@ -5,7 +5,7 @@ CONDA_LIB=testlib #$(CONDA_PREFIX)/lib
 HTSINC=$(CONDA_PREFIX)/include
 VCFLIB=vcflib
 
-CPPOPTS=  -g
+CPPOPTS=  -O3
 # -D_GLIBCXX_USE_CXX11_ABI=0
 
 
