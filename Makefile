@@ -1,8 +1,8 @@
 all: vcflib/lib/libvcflib.a partitionByPhasedSNVs readToSNVList  
 
 SEQAN=seqan/include
-CONDA_LIB=testlib #$(CONDA_PREFIX)/lib
-HTSINC=$(CONDA_PREFIX)/include
+#CONDA_LIB=testlib #$(CONDA_PREFIX)/lib
+#HTSINC=$(CONDA_PREFIX)/include
 VCFLIB=vcflib
 
 CPPOPTS=  -O3
@@ -31,11 +31,11 @@ partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h vcflib/lib/libvcfl
      -o $@ \
      -I args \
      -I blasr \
-     -I $(VCFLIB)/include -I $(HTSINC) \
+     -I htslib \
+     -I $(VCFLIB)/include \
      -L $(VCFLIB)/lib -l vcflib \
      -L $(VCFLIB)/tabixpp/htslib -l hts \
-     -lpthread -lz -lm -llzma -lbz2 \
-	   -lvcflib 
+     -lpthread -lz -lm -llzma -lbz2
 
 #partitionByPhasedSNVs: PartitionByPhasedSNVs.cpp FastaIndex.h vcflib/lib/libvcflib.a
 #	$(CPP) $(CPPOPTS) -std=c++0x $<  \
@@ -56,7 +56,7 @@ readToSNVList: ReadToSNVList.cpp PartitionTools.h FastaIndex.h SamUtils.h Genoty
 
 .PHONY: clean
 clean:
-	make -C $(LIBBZ2) -f Makefile-libbz2_so clean
-	rm $(LIBBZ2)/libbz2.so
+	#make -C $(LIBBZ2) -f Makefile-libbz2_so clean
+	#rm $(LIBBZ2)/libbz2.so
 	make -C vcflib clean
 	rm -rf partitionByPhasedSNVs readToSNVList
